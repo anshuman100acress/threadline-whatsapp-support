@@ -20,9 +20,13 @@ The browser demo needs no environment variables. Render's free web service can s
 
 For local setup, copy `.env.example` to `.env` and set the same values. Meta needs a publicly reachable HTTPS callback. [Meta WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/)
 
-## 3. Enable the LLM (optional)
+## 3. Enable Meta Model API (optional)
 
-Set `OPENAI_API_KEY` and, if needed, `OPENAI_MODEL` in the service environment. The default is `gpt-4.1-mini`. This integration can incur API charges. Only unmatched text from signed WhatsApp requests reaches the model. Use sample messages for this demo, since unmatched customer text would be sent to the configured API. [OpenAI API docs](https://platform.openai.com/docs/api-reference/chat)
+1. In the [Meta developer console](https://dev.meta.ai/), select the project that has your Meta Model API credits and create an API key for that project.
+2. Set `META_MODEL_API_KEY` in Render (or your local `.env`). The default model is `muse-spark-1.3`. Set `META_MODEL` if you want to use another supported reasoning model available to your project.
+3. If you previously configured `OPENAI_API_KEY` or `OPENAI_MODEL`, remove them from your environment. Redeploy and send “I changed my mind after buying it” from your WhatsApp test phone to exercise model routing.
+
+The model key is separate from the WhatsApp Cloud API token. The browser demo uses rules only. On WhatsApp, only unmatched text goes to Meta Model API, so use sample messages for this demo. Check the project's billing console to confirm available credits and usage. [Meta chat completions quickstart](https://dev.meta.ai/docs/cookbook/quickstart-chat-completions)
 
 ## 4. Enable n8n handoff (optional)
 

@@ -35,10 +35,10 @@ python -m unittest discover -s tests -v
 
 - Browser → FastAPI → rule routing → a reply from sample order and policy data. The anonymous browser endpoint makes no paid calls and creates no support cases.
 - WhatsApp → Meta Cloud API webhook → verification and signature validation → the same support logic → Graph API reply.
-- For signed WhatsApp events, an optional LLM classifies messages the rules cannot match. The model returns a permitted intent label. The Python code chooses the reply from known data, and it can answer with the supported topics if model routing is unavailable.
+- For signed WhatsApp events, Meta’s optional Muse Spark integration classifies messages the rules cannot match. The model returns a permitted intent label. The Python code chooses the reply from known data, and it can answer with the supported topics if model routing is unavailable.
 - Live handoff → authenticated n8n webhook → a support-request record in n8n execution history. Staff can see the message ID and callback number, subject to n8n retention. The prototype sends no staff notification.
 
-See [deployment and integration setup](DEPLOY.md) for Render, Meta, OpenAI, and n8n.
+See [deployment and integration setup](DEPLOY.md) for Render, WhatsApp Cloud API, Meta Model API, and n8n.
 
 ## What to show in the interview
 

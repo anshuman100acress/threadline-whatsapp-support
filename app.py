@@ -62,20 +62,22 @@ async def respond(
     if intent == "unknown" and order:
         intent = "tracking"
     routing = "rules"
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("META_MODEL_API_KEY")
     if intent == "unknown" and api_key and event_id:
         try:
             response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
+                "https://api.meta.ai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={
-                    "model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+                    "model": os.getenv("META_MODEL") or "muse-spark-1.3",
                     "messages": [
                         {"role": "system", "content": "Classify the customer text. Return only one label: "
                          + ", ".join(INTENTS)},
                         {"role": "user", "content": message},
                     ],
-                    "max_completion_tokens": 24,
+                    "reasoning_effort": "minimal",
+                    "max_completion_tokens": 256,
+                    "store": False,
                 },
             )
             response.raise_for_status()

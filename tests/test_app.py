@@ -49,7 +49,8 @@ class WebhookTests(ClientTestCase):
             "META_ACCESS_TOKEN": "test-access",
             "META_PHONE_NUMBER_ID": "123",
             "META_GRAPH_VERSION": "v99.0",
-            "OPENAI_API_KEY": "fake-key",
+            "META_MODEL_API_KEY": "fake-key",
+            "META_MODEL": "",
             "N8N_HANDOFF_URL": "https://workflow.example/webhook/threadline",
             "N8N_HANDOFF_TOKEN": "handoff-secret",
         }
@@ -58,7 +59,7 @@ class WebhookTests(ClientTestCase):
         app.completed.clear()
         self.requests = []
         real_client = httpx.AsyncClient
-        transport = httpx.MockTransport(self.downstream)
+        transport = httpx.MockTransport(lambda request: self.downstream(request))
         patch.object(app.httpx, "AsyncClient",
                      side_effect=lambda **kwargs: real_client(transport=transport, **kwargs)).start()
 
@@ -96,8 +97,32 @@ class WebhookTests(ClientTestCase):
             body, headers = self.event(message, message)
             self.assertEqual(self.client.post("/webhook", content=body, headers=headers).status_code, 200)
         self.assertEqual([request.url.host for request in self.requests], [
-            "api.openai.com", "graph.facebook.com", "workflow.example", "graph.facebook.com"
+            "api.meta.ai", "graph.facebook.com", "workflow.example", "graph.facebook.com"
         ])
+        model_request = self.requests[0]
+        self.assertEqual(model_request.url.path, "/v1/chat/completions")
+        self.assertEqual(model_request.headers["Authorization"], "Bearer fake-key")
+        model_payload = json.loads(model_request.content)
+        self.assertEqual(model_payload["model"], "muse-spark-1.3")
+        self.assertEqual(model_payload["reasoning_effort"], "minimal")
+        self.assertFalse(model_payload["store"])
         self.assertIn("14 days", json.loads(self.requests[1].content)["text"]["body"])
         self.assertEqual(self.requests[2].headers["X-Handoff-Token"], "handoff-secret")
         self.assertEqual(json.loads(self.requests[2].content)["reply_to"], "15550001111")
+
+    def test_browser_skips_model_even_with_key(self):
+        response = self.client.post("/api/chat", json={"message": "I changed my mind"})
+        self.assertEqual(response.json()["routing"], "rules")
+        self.assertEqual(self.requests, [])
+
+    def test_model_error_falls_back_to_supported_topics(self):
+        def downstream(request):
+            self.requests.append(request)
+            status = 429 if request.url.host == "api.meta.ai" else 200
+            return httpx.Response(status)
+
+        with patch.object(self, "downstream", side_effect=downstream):
+            body, headers = self.event("I changed my mind", "wamid.fallback")
+            self.assertEqual(self.client.post("/webhook", content=body, headers=headers).status_code, 200)
+        self.assertEqual(len(self.requests), 2)
+        self.assertIn("I can help", json.loads(self.requests[1].content)["text"]["body"])
