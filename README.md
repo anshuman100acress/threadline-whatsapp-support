@@ -38,6 +38,8 @@ python -m unittest discover -s tests -v
 - For signed WhatsApp events, Meta’s optional Muse Spark integration classifies messages the rules cannot match. The model returns a permitted intent label. The Python code chooses the reply from known data, and it can answer with the supported topics if model routing is unavailable.
 - Live handoff → authenticated n8n webhook → a support-request record in n8n execution history. Staff can see the message ID and callback number, subject to n8n retention. The prototype sends no staff notification.
 
+The [local n8n demo](DEPLOY.md#test-the-workflow-locally) uses the free self-hosted Community Edition and a sample webhook payload.
+
 See [deployment and integration setup](DEPLOY.md) for Render, WhatsApp Cloud API, Meta Model API, and n8n.
 
 ## What to show in the interview

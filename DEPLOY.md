@@ -30,10 +30,39 @@ The model key is separate from the WhatsApp Cloud API token. The browser demo us
 
 ## 4. Enable n8n handoff (optional)
 
+The browser demo simulates handoff with no n8n account or installation. To show the actual workflow during an interview, run the free self-hosted n8n Community Edition on your computer with Docker. This local workflow demo needs no WhatsApp or model credentials. [n8n Docker setup](https://docs.n8n.io/hosting/installation/docker/)
+
+### Test the workflow locally
+
+```bash
+docker volume create threadline_n8n
+docker run --rm --name threadline-n8n \
+  -p 127.0.0.1:5678:5678 \
+  -v threadline_n8n:/home/node/.n8n \
+  docker.n8n.io/n8nio/n8n
+```
+
+1. Open `http://localhost:5678` and create a local owner account.
+2. Import `n8n/threadline-handoff.json`. In **Receive handoff**, attach a **Header Auth** credential with name `X-Handoff-Token` and a random secret as its value.
+3. Click **Listen for test event** and copy the **Test URL**. Run this command in a second terminal, using that URL and the same secret.
+
+```bash
+curl --fail-with-body -X POST http://localhost:5678/webhook-test/threadline-handoff \
+  -H 'X-Handoff-Token: REPLACE_WITH_YOUR_LOCAL_SECRET' \
+  -H 'Content-Type: application/json' \
+  -d '{"event_id":"demo-handoff-1","intent":"handoff","reply_to":"15550001111"}'
+```
+
+Open **Record request** on the n8n canvas to show the sample request and its timestamp. This sends the same payload shape as the WhatsApp flow. Start listening again before repeating the test.
+
+### Connect live WhatsApp to n8n
+
+The FastAPI service must be able to reach the workflow's **Production URL**. A Render deployment cannot reach n8n on your laptop through `localhost`. For a live demo with both services on your computer, run FastAPI locally, give Meta a public HTTPS callback for FastAPI, and keep n8n local. In that setup, use `http://localhost:5678/webhook/threadline-handoff` for `N8N_HANDOFF_URL` in your local `.env`. If FastAPI runs on Render, use a reachable HTTPS workflow URL and set the variables in Render instead.
+
 1. Import `n8n/threadline-handoff.json` into n8n.
 2. In **Receive handoff**, create a **Header Auth** credential. Use `X-Handoff-Token` for the header name and a fresh random secret for the value.
 3. Save and publish or activate the workflow. Copy its **Production URL**.
-4. Set `N8N_HANDOFF_URL` to that HTTPS URL and `N8N_HANDOFF_TOKEN` to the same secret in Render. Redeploy.
+4. Set `N8N_HANDOFF_URL` to that HTTPS URL and `N8N_HANDOFF_TOKEN` to the same secret in the FastAPI environment. Restart or redeploy FastAPI.
 5. Send `human` on WhatsApp. Open the successful n8n execution to see the request. Restrict access to the workflow and execution history, which contains the test recipient's phone number.
 
 The workflow uses execution history as its prototype queue. The app keeps recent WhatsApp message IDs in memory for one worker. Retries after a restart or after a downstream failure can repeat delivery or handoffs. Use a persistent queue and idempotent support records before enabling real traffic. [n8n Webhook node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/)
