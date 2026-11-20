@@ -28,7 +28,22 @@ For local setup, copy `.env.example` to `.env` and set the same values. Meta nee
 
 The model key is separate from the WhatsApp Cloud API token. The browser demo uses rules only. On WhatsApp, only unmatched text goes to Meta Model API, so use sample messages for this demo. Check the project's billing console to confirm available credits and usage. [Meta chat completions quickstart](https://dev.meta.ai/docs/cookbook/quickstart-chat-completions)
 
-## 4. Enable n8n handoff (optional)
+## 4. Run live handoff without n8n
+
+Complete the WhatsApp setup in step 2 and leave the two `N8N_HANDOFF_*` values unset. A signed WhatsApp message such as `human` creates a support request in the built-in SQLite queue. The same WhatsApp message ID can only create one local record.
+
+Set `HANDOFF_DB_PATH` to a writable path on a persistent disk, such as `/var/lib/threadline/handoffs.sqlite3`. The local default is `data/handoffs.sqlite3`. Render's free web service has an ephemeral filesystem, so use it for the browser demo. For a live queue, use a host with persistent storage and shell access, including your own computer with a public HTTPS callback for FastAPI.
+
+Run these commands from the deployed app directory on the same host, with the same database path as the app:
+
+```bash
+python -m handoffs
+python -m handoffs --resolve 'EVENT_ID_FROM_THE_LIST'
+```
+
+The first command lists pending requests and their callback numbers. Contact the customer from your support channel before marking the request resolved. Queue records contain phone numbers, so restrict access to the database and command output. This workflow requires an operator to check the queue.
+
+## 5. Enable n8n handoff (optional)
 
 The browser demo simulates handoff with no n8n account or installation. To show the actual workflow during an interview, run the free self-hosted n8n Community Edition on your computer with Docker. This local workflow demo needs no WhatsApp or model credentials. [n8n Docker setup](https://docs.n8n.io/hosting/installation/docker/)
 
@@ -65,4 +80,4 @@ The FastAPI service must be able to reach the workflow's **Production URL**. A R
 4. Set `N8N_HANDOFF_URL` to that HTTPS URL and `N8N_HANDOFF_TOKEN` to the same secret in the FastAPI environment. Restart or redeploy FastAPI.
 5. Send `human` on WhatsApp. Open the successful n8n execution to see the request. Restrict access to the workflow and execution history, which contains the test recipient's phone number.
 
-The workflow uses execution history as its prototype queue. The app keeps recent WhatsApp message IDs in memory for one worker. Retries after a restart or after a downstream failure can repeat delivery or handoffs. Use a persistent queue and idempotent support records before enabling real traffic. [n8n Webhook node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/)
+When n8n is unavailable, Threadline saves the request in the built-in queue from step 4. A timeout can lead to a record in both places if n8n received the request before timing out. The n8n workflow uses execution history as its queue. The app keeps recent WhatsApp message IDs in memory for one worker. Retries after a restart or after a downstream failure can repeat delivery or handoffs. Use a persistent queue and idempotent support records before enabling real traffic. [n8n Webhook node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/)

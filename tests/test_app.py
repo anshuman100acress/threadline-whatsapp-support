@@ -2,7 +2,11 @@ import hashlib
 import hmac
 import json
 import os
+import sqlite3
+import tempfile
 import unittest
+from contextlib import closing
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
@@ -43,7 +47,10 @@ class ChatTests(ClientTestCase):
 class WebhookTests(ClientTestCase):
     def setUp(self):
         super().setUp()
+        temp_dir = self.enterContext(tempfile.TemporaryDirectory())
+        self.queue_path = Path(temp_dir) / "data" / "handoffs.sqlite3"
         config = {
+            "HANDOFF_DB_PATH": str(self.queue_path),
             "META_APP_SECRET": "test-secret",
             "META_VERIFY_TOKEN": "verify-me",
             "META_ACCESS_TOKEN": "test-access",
@@ -126,3 +133,28 @@ class WebhookTests(ClientTestCase):
             self.assertEqual(self.client.post("/webhook", content=body, headers=headers).status_code, 200)
         self.assertEqual(len(self.requests), 2)
         self.assertIn("I can help", json.loads(self.requests[1].content)["text"]["body"])
+
+    def assert_queued(self, event_id):
+        with closing(sqlite3.connect(self.queue_path)) as db:
+            self.assertEqual(db.execute("SELECT event_id, reply_to FROM handoffs").fetchall(),
+                             [(event_id, "15550001111")])
+        self.assertIn("support queue", json.loads(self.requests[-1].content)["text"]["body"])
+
+    def test_handoff_without_n8n_survives_webhook_reprocessing(self):
+        body, headers = self.event("human", "wamid.queue")
+        with patch.dict(os.environ, {"N8N_HANDOFF_URL": ""}):
+            for _ in range(2):
+                app.completed.clear()
+                self.assertEqual(self.client.post("/webhook", content=body, headers=headers).status_code, 200)
+        self.assertEqual([request.url.host for request in self.requests], ["graph.facebook.com"] * 2)
+        self.assert_queued("wamid.queue")
+
+    def test_handoff_falls_back_when_n8n_is_unavailable(self):
+        def downstream(request):
+            self.requests.append(request)
+            return httpx.Response(503 if request.url.host == "workflow.example" else 200)
+
+        with patch.object(self, "downstream", side_effect=downstream):
+            body, headers = self.event("human", "wamid.fallback")
+            self.assertEqual(self.client.post("/webhook", content=body, headers=headers).status_code, 200)
+        self.assert_queued("wamid.fallback")

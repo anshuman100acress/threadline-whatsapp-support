@@ -1,8 +1,11 @@
 """Threadline, a fashion retail support prototype."""
+import asyncio
 import hashlib
 import hmac
+import logging
 import os
 import re
+import sqlite3
 from pathlib import Path
 
 import httpx
@@ -12,7 +15,10 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from handoffs import enqueue
+
 load_dotenv()
+logger = logging.getLogger(__name__)
 app = FastAPI(title="Threadline Support")
 static = Path(__file__).with_name("static")
 app.mount("/static", StaticFiles(directory=static), name="static")
@@ -96,19 +102,25 @@ async def respond(
             reply = "Send a demo order ID such as TL-1042 or TL-2075."
     elif intent == "handoff":
         url, token = os.getenv("N8N_HANDOFF_URL"), os.getenv("N8N_HANDOFF_TOKEN")
-        if not event_id:
+        if not event_id or not sender:
             handoff, reply = "simulated", "This would create a support request in the live WhatsApp flow."
-        elif not url or not token:
-            handoff, reply = "unavailable", "Live handoff is currently unavailable."
         else:
+            if url and token:
+                try:
+                    response = await client.post(
+                        url, headers={"X-Handoff-Token": token},
+                        json={"event_id": event_id, "intent": intent, "reply_to": sender},
+                    )
+                    response.raise_for_status()
+                    return Reply(intent=intent, routing=routing, handoff="acknowledged",
+                                 reply="The support workflow received your request.")
+                except httpx.HTTPError:
+                    logger.warning("n8n handoff failed; using the local support queue")
             try:
-                response = await client.post(
-                    url, headers={"X-Handoff-Token": token},
-                    json={"event_id": event_id, "intent": intent, "reply_to": sender},
-                )
-                response.raise_for_status()
-                handoff, reply = "acknowledged", "The support workflow received your request."
-            except httpx.HTTPError:
+                await asyncio.to_thread(enqueue, event_id, sender)
+                handoff, reply = "queued", "Your request has been added to the support queue."
+            except (sqlite3.Error, OSError):
+                logger.error("Could not write to the local support queue")
                 handoff, reply = "unavailable", "Support handoff is temporarily unavailable. Please try again."
     else:
         reply = REPLIES[intent]
