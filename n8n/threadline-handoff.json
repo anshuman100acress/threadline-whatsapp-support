@@ -1,0 +1,53 @@
+{
+  "name": "Threadline — support handoff",
+  "active": false,
+  "nodes": [
+    {
+      "id": "a134c8ab-347e-4aba-a73e-03f0940cd739",
+      "name": "Receive handoff",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "threadline-handoff",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "threadline-handoff",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "27d67b95-5a22-47de-b214-c1719cc292b1",
+      "name": "Record request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const { event_id, intent, reply_to } = $input.first().json.body;\nif (typeof event_id !== 'string' || !event_id || intent !== 'handoff' || typeof reply_to !== 'string' || !reply_to) {\n  throw new Error('Invalid support request');\n}\nreturn [{ json: { event_id, intent, reply_to, received_at: new Date().toISOString() } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Receive handoff": {
+      "main": [
+        [
+          {
+            "node": "Record request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all"
+  }
+}
